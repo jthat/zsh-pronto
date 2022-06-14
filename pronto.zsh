@@ -9,6 +9,8 @@
 zmodload zsh/datetime || { print "can't load zsh/datetime"; return }
 autoload -Uz add-zsh-hook || { print "can't load add-zsh-hook"; return }
 
+(( ${+pronto_features} )) || typeset -A pronto_features=( git 1 )
+
 pronto_preexec() {
   pronto_timestamp=$EPOCHREALTIME
 }
@@ -36,26 +38,28 @@ pronto_precmd () {
   }
   pronto_timestamp=0
 
-  local -A gs
+  if (( $pronto_features[git] )) {
+    local -A gs
 
-  command git status --porcelain=v2 --branch --untracked-files=no 2>/dev/null | {
-    local IFS=''; while read -A; do
-      if [[ $reply[1] =~ '^# branch\.(oid|head|ab) (.*)$' ]] {
-        gs+=($match)
-      }
-    done
-  }
-
-  if [[ -n $gs ]] {
-    local ab_string=()
-    if [[ $gs[ab] =~ '^[+]([0-9]+) [-]([0-9]+)$' ]] {
-      local ahead=$match[1]
-      local behind=$match[2]
-      [[ $ahead != 0 ]] && ab_string+=${ahead}↑
-      [[ $behind != 0 ]] && ab_string+=${behind}↓
+    command git status --porcelain=v2 --branch --untracked-files=no 2>/dev/null | {
+      local IFS=''; while read -A; do
+        if [[ $reply[1] =~ '^# branch\.(oid|head|ab) (.*)$' ]] {
+          gs+=($match)
+        }
+      done
     }
-    local git_string=($gs[head] ${gs[oid]:0:7} ${(j:·:)ab_string})
-    all+=${(j: :)git_string}
+
+    if [[ -n $gs ]] {
+      local ab_string=()
+      if [[ $gs[ab] =~ '^[+]([0-9]+) [-]([0-9]+)$' ]] {
+        local ahead=$match[1]
+        local behind=$match[2]
+        [[ $ahead != 0 ]] && ab_string+=${ahead}↑
+        [[ $behind != 0 ]] && ab_string+=${behind}↓
+      }
+      local git_string=($gs[head] ${gs[oid]:0:7} ${(j:·:)ab_string})
+      all+=${(j: :)git_string}
+    }
   }
 
   if [[ -n $delta_string ]] {
