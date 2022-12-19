@@ -1,6 +1,6 @@
 # pronto zsh theme
 #
-# Copyright (C) 2021 Jason Thatcher.
+# Copyright (C) 2021-2022 Jason Thatcher.
 # Licensed under the MIT license.
 # SPDX-License-Identifier: MIT
 #
@@ -9,7 +9,24 @@
 zmodload zsh/datetime || { print "can't load zsh/datetime"; return }
 autoload -Uz add-zsh-hook || { print "can't load add-zsh-hook"; return }
 
-(( ${+pronto_features} )) || typeset -A pronto_features=( git 1 )
+(( ${+pronto_features} )) || typeset -A pronto_features=( time 1 git 1 rprompt 1 )
+
+pronto_init() {
+  local lp=('%(?..%??)%n@%m:')
+  local rp=()
+
+  if (( $pronto_features[rprompt] )) {
+    rp+=('%1v')
+  } else {
+    pronto_features[time]=0
+    lp+=('%1v')
+  }
+
+  lp+=('%0~%#%(1j.%j&.) ')
+
+  PROMPT=${(j..)lp}
+  RPROMPT=${(j..)rp}
+}
 
 pronto_preexec() {
   pronto_timestamp=$EPOCHREALTIME
@@ -30,13 +47,15 @@ pronto_precmd () {
   local all=()
   local delta_string=""
 
-  pronto_elapsed=0
-  if (( pronto_timestamp > 0 )) {
-    pronto_elapsed=$(( EPOCHREALTIME - pronto_timestamp ))
-    delta_string=$(pronto_format_duration $pronto_elapsed)
-    pronto_last_timestamp=$pronto_timestamp
+  if (( $pronto_features[time] )) {
+    pronto_elapsed=0
+    if (( pronto_timestamp > 0 )) {
+      pronto_elapsed=$(( EPOCHREALTIME - pronto_timestamp ))
+      delta_string=$(pronto_format_duration $pronto_elapsed)
+      pronto_last_timestamp=$pronto_timestamp
+    }
+    pronto_timestamp=0
   }
-  pronto_timestamp=0
 
   if (( $pronto_features[git] )) {
     local -A gs
@@ -57,22 +76,28 @@ pronto_precmd () {
         [[ $ahead != 0 ]] && ab_string+=${ahead}↑
         [[ $behind != 0 ]] && ab_string+=${behind}↓
       }
-      local git_string=($gs[head] ${gs[oid]:0:7} ${(j:·:)ab_string})
-      all+=${(j: :)git_string}
+      local git_string=($gs[head] ${gs[oid]:0:7} ${(j::)ab_string})
+      (( $pronto_features[rprompt] )) || git_string=(${(Oa)git_string})
+      all+=${(j.·.)git_string}
     }
   }
 
-  if [[ -n $delta_string ]] {
-    all+=$delta_string
+  if (( $pronto_features[time] )) {
+    if [[ -n $delta_string ]] {
+      all+=$delta_string
+    }
+    all+=$(print -Pn '%D{%f %b %L:%M:%S%p}')
   }
 
-  all+=$(print -Pn '%D{%f %b %L:%M:%S%p}')
-
-  psvar=("${(j: | :)all}")
+  if (( $pronto_features[rprompt] )) {
+    psvar=("${(j: | :)all}")
+  } else {
+    (( $#all )) && all+=''
+    psvar=("${(j.:.)all}")
+  }
 }
 
 add-zsh-hook precmd pronto_precmd
 add-zsh-hook preexec pronto_preexec
 
-PROMPT='%(?..%??)%n@%m:%0~%#%(1j.%j&.) '
-RPROMPT='%1v'
+pronto_init
