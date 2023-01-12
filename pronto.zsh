@@ -1,6 +1,6 @@
 # pronto zsh theme
 #
-# Copyright (C) 2021-2022 Jason Thatcher.
+# Copyright (C) 2021-2023 Jason Thatcher.
 # Licensed under the MIT license.
 # SPDX-License-Identifier: MIT
 #
@@ -9,7 +9,7 @@
 zmodload zsh/datetime || { print "can't load zsh/datetime"; return }
 autoload -Uz add-zsh-hook || { print "can't load add-zsh-hook"; return }
 
-(( ${+pronto_features} )) || typeset -A pronto_features=( time 1 git 1 rprompt 1 )
+(( ${+pronto_features} )) || typeset -A pronto_features=( time 1 git 1 git_ab 1 rprompt 1 )
 
 pronto_init() {
   local lp=('%(?..%??)%n@%m:')
@@ -60,12 +60,28 @@ pronto_precmd () {
   if (( $pronto_features[git] )) {
     local -A gs
 
-    command git status --porcelain=v2 --branch --untracked-files=no 2>/dev/null | {
-      local IFS=''; while read -A; do
-        if [[ $reply[1] =~ '^# branch\.(oid|head|ab) (.*)$' ]] {
-          gs+=($match)
+    if (( $pronto_features[git_ab] )) {
+      command git status --porcelain=v2 --branch --untracked-files=no 2>/dev/null | {
+        local IFS=''; while read -A; do
+          if [[ $reply[1] =~ '^# branch\.(oid|head|ab) (.*)$' ]] {
+            gs+=($match)
+          }
+        done
+      }
+    } else {
+      # fast path
+      if [[ -e .git ]] {
+        gs[oid]=$(command git rev-parse HEAD 2>/dev/null)
+        if (( $? )) {
+          gs[oid]='(initial)'
         }
-      done
+        gs[head]=$(command git symbolic-ref HEAD 2>/dev/null)
+        if (( $? )) {
+          gs[head]='(detached)'
+        } else {
+          gs[head]=${gs[head]#refs/heads/}
+        }
+      }
     }
 
     if [[ -n $gs ]] {
@@ -76,7 +92,11 @@ pronto_precmd () {
         [[ $ahead != 0 ]] && ab_string+=${ahead}↑
         [[ $behind != 0 ]] && ab_string+=${behind}↓
       }
-      local git_string=($gs[head] ${gs[oid]:0:7} ${(j::)ab_string})
+      local oid=${gs[oid]}
+      if (( $#oid > 9 )) {
+        oid=${oid:0:7}
+      }
+      local git_string=($gs[head] ${oid} ${(j::)ab_string})
       (( $pronto_features[rprompt] )) || git_string=(${(Oa)git_string})
       all+=${(j.·.)git_string}
     }
