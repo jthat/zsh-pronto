@@ -70,12 +70,22 @@ pronto_precmd () {
       }
     } else {
       # fast path
-      if [[ -e .git ]] {
-        gs[oid]=$(command git rev-parse HEAD 2>/dev/null)
+      local repo
+      () {
+        local r=(${(s./.)PWD:P})
+        while :; do
+          repo=/${(j./.)r}
+          [[ -e ${repo}/.git ]] && return 0
+          (( $#r )) || return 1
+          r=(${r[1,-2]})
+        done
+      }
+      (( $? )) || {
+        gs[oid]=$(command git -C ${repo} rev-parse HEAD 2>/dev/null)
         if (( $? )) {
           gs[oid]='(initial)'
         }
-        gs[head]=$(command git symbolic-ref HEAD 2>/dev/null)
+        gs[head]=$(command git -C ${repo} symbolic-ref HEAD 2>/dev/null)
         if (( $? )) {
           gs[head]='(detached)'
         } else {
